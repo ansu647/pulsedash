@@ -3,177 +3,154 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>PulseDash — Real-Time System Health Monitor</title>
-  <meta name="description" content="PulseDash: Real-time CPU, Memory, Disk, and Network monitoring dashboard with live charts, alerts, and process insights."/>
+  <title>PulseDash — SRE System Health Monitor</title>
+  <meta name="description" content="SRE-grade real-time monitoring: SLOs, error budgets, incident tracking, Prometheus metrics."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{
-      --bg:#080d18;--bg-card:rgba(255,255,255,0.04);--bg-card-h:rgba(255,255,255,0.07);
-      --border:rgba(255,255,255,0.08);--border-h:rgba(255,255,255,0.15);
-      --cpu:#6ee7f7;--mem:#a78bfa;--disk:#34d399;--net-s:#f59e0b;--net-r:#60a5fa;
-      --danger:#ff4d6d;--warn:#f59e0b;--ok:#34d399;
-      --t1:#f0f4ff;--t2:#94a3b8;--t3:#64748b;
-      --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
-      --r:16px;--rs:10px;--shadow:0 8px 32px rgba(0,0,0,.45);
-    }
-    html{font-size:16px}
-    body{background:var(--bg);background-image:radial-gradient(ellipse 80% 50% at 20% 0%,rgba(99,102,241,.12),transparent 60%),radial-gradient(ellipse 60% 40% at 80% 100%,rgba(110,231,247,.08),transparent 60%);color:var(--t1);font-family:var(--font);min-height:100vh;overflow-x:hidden}
-    ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--border-h);border-radius:3px}
-
-    /* TOPBAR */
-    .topbar{display:flex;align-items:center;justify-content:space-between;padding:.75rem 2rem;border-bottom:1px solid var(--border);background:rgba(8,13,24,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
-    .topbar-left{display:flex;align-items:center;gap:.75rem}
-    .topbar-center{display:flex;align-items:center}
-    .topbar-right{display:flex;align-items:center;gap:1rem}
-    .logo{display:flex;align-items:center;gap:.4rem}
-    .logo-icon{font-size:1.4rem;}
-    @keyframes heartbeat{0%,100%{transform:scale(1)}14%{transform:scale(1.2)}28%{transform:scale(1)}42%{transform:scale(1.15)}70%{transform:scale(1)}}
-    .logo-text{font-size:1.2rem;font-weight:800;letter-spacing:-.02em}
-    .logo-accent{color:var(--cpu)}
-    .version-badge{font-size:.65rem;font-family:var(--mono);color:var(--t3);background:var(--bg-card);border:1px solid var(--border);padding:.15rem .5rem;border-radius:999px}
-    .demo-badge{font-size:.68rem;font-weight:600;background:rgba(245,158,11,.12);color:var(--warn);border:1px solid rgba(245,158,11,.3);padding:.2rem .7rem;border-radius:999px;letter-spacing:.03em}
-    .status-pill{display:flex;align-items:center;gap:.5rem;padding:.3rem .9rem;border-radius:999px;background:var(--bg-card);border:1px solid var(--border);font-size:.78rem;font-weight:500;color:var(--t2);transition:all .4s}
-    .status-pill.live{border-color:rgba(52,211,153,.4);color:var(--ok)}
-    .status-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok);animation:pulse-dot 1.8s ease-in-out infinite}
-    @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
-    .clock{font-family:var(--mono);font-size:.85rem;color:var(--t2);letter-spacing:.05em}
-
-    /* LAYOUT */
-    .dashboard{max-width:1440px;margin:0 auto;padding:1.75rem 2rem 3rem;display:flex;flex-direction:column;gap:1.5rem}
-
-    /* STAT CARDS */
-    .stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
-    .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem 1.4rem;backdrop-filter:blur(12px);transition:border-color .3s,box-shadow .3s,transform .25s;cursor:default}
-    .stat-card:hover{border-color:var(--border-h);transform:translateY(-2px);box-shadow:var(--shadow)}
-    .card-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.9rem}
-    .card-icon{font-size:1.1rem}.card-label{font-size:.78rem;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.06em;flex:1}
-    .card-badge{font-size:.62rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;display:none}
-    .card-badge.alert-on{display:inline-block;background:rgba(255,77,109,.15);color:var(--danger);border:1px solid rgba(255,77,109,.3);animation:badge-pulse 1.5s ease-in-out infinite}
-    @keyframes badge-pulse{0%,100%{opacity:1}50%{opacity:.5}}
-    .card-value{font-size:2.4rem;font-weight:800;letter-spacing:-.03em;line-height:1;margin-bottom:.9rem;font-family:var(--mono)}
-    .progress-bar-wrap{height:6px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden;margin-bottom:.6rem}
-    .progress-bar{height:100%;border-radius:999px;transition:width .6s cubic-bezier(.4,0,.2,1)}
-    .cpu-bar{background:linear-gradient(90deg,#6ee7f7,#38bdf8)}.mem-bar{background:linear-gradient(90deg,#a78bfa,#818cf8)}.disk-bar{background:linear-gradient(90deg,#34d399,#10b981)}
-    .card-sub{font-size:.72rem;color:var(--t3);font-family:var(--mono)}
-    .stat-card.danger .card-value{color:var(--danger);text-shadow:0 0 20px rgba(255,77,109,.4)}
-    .stat-card.danger{border-color:rgba(255,77,109,.3);box-shadow:0 0 20px rgba(255,77,109,.08)}
-    .stat-card.danger .progress-bar{background:var(--danger)!important}
-    .net-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--border)}
-    .net-row:last-child{border-bottom:none}.net-label{font-size:.72rem;color:var(--t3)}.net-val{font-size:.82rem;font-family:var(--mono);color:var(--t2)}
-
-    /* CHARTS */
-    .charts-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
-    .chart-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem 1.4rem 1rem;backdrop-filter:blur(12px);transition:border-color .3s}
-    .chart-card:hover{border-color:var(--border-h)}
-    .chart-card-header{display:flex;justify-content:space-between;align-items:center;font-size:.82rem;font-weight:600;color:var(--t2);margin-bottom:1rem;text-transform:uppercase;letter-spacing:.05em}
-    .chart-unit{font-weight:400;color:var(--t3);margin-left:.2rem}
-    .chart-live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok);animation:pulse-dot 1.8s ease-in-out infinite}
-    .chart-wrap{position:relative;height:180px}
-
-    /* BOTTOM ROW */
-    .bottom-row{display:grid;grid-template-columns:1.6fr 1fr;gap:1rem}
-    .panel{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);backdrop-filter:blur(12px);overflow:hidden;display:flex;flex-direction:column}
-    .panel-header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.4rem;border-bottom:1px solid var(--border);font-size:.82rem;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em}
-    .panel-sub{font-weight:400;color:var(--t3)}
-    .alert-count-badge{background:rgba(255,77,109,.15);color:var(--danger);border:1px solid rgba(255,77,109,.25);font-size:.68rem;font-weight:700;padding:.1rem .55rem;border-radius:999px}
-    .table-wrap{overflow-y:auto;max-height:280px}
-    table{width:100%;border-collapse:collapse;font-size:.78rem}
-    thead th{padding:.55rem 1rem;text-align:left;font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
-    tbody tr{border-bottom:1px solid var(--border);transition:background .2s}
-    tbody tr:last-child{border-bottom:none}
-    tbody tr:hover{background:var(--bg-card-h)}
-    tbody td{padding:.5rem 1rem;color:var(--t2);font-family:var(--mono)}
-    tbody td:nth-child(2){color:var(--t1);font-family:var(--font);font-weight:500}
-    .cpu-hot{color:var(--cpu)!important}.cpu-warn{color:var(--warn)!important}.cpu-crit{color:var(--danger)!important}
-    .status-running{color:var(--ok)}.status-sleep{color:var(--t3)}
-    .alerts-list{padding:.75rem;overflow-y:auto;max-height:280px;display:flex;flex-direction:column;gap:.5rem}
-    .no-alerts{text-align:center;color:var(--ok);padding:1.5rem;font-size:.82rem}
-    .alert-item{padding:.65rem .9rem;border-radius:var(--rs);border-left:3px solid var(--danger);background:rgba(255,77,109,.06);font-size:.76rem;color:var(--t2);animation:slide-in .3s ease}
-    .alert-item .a-msg{color:var(--danger);font-weight:600;margin-bottom:.2rem}
-    .alert-item .a-time{color:var(--t3);font-family:var(--mono);font-size:.68rem}
-    @keyframes slide-in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
-
-    /* DEMO BANNER */
-    .demo-banner{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:var(--rs);padding:.65rem 1.1rem;font-size:.78rem;color:var(--warn);display:flex;align-items:center;gap:.6rem}
-    .demo-banner a{color:var(--cpu);text-decoration:none;font-weight:600}
-    .demo-banner a:hover{text-decoration:underline}
-
-    @media(max-width:1200px){.stat-cards{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:800px){.charts-grid,.bottom-row{grid-template-columns:1fr}.stat-cards{grid-template-columns:repeat(2,1fr)}.dashboard{padding:1rem}.topbar{padding:.75rem 1rem}.topbar-center{display:none}}
-    @media(max-width:480px){.stat-cards{grid-template-columns:1fr}}
-  </style>
+  <link rel="stylesheet" href="./static/css/style.css"/>
 </head>
 <body>
 
+<!-- ░░ TOPBAR ░░ -->
 <header class="topbar">
   <div class="topbar-left">
     <div class="logo">
       <span class="logo-icon">📡</span>
       <span class="logo-text">Pulse<span class="logo-accent">Dash</span></span>
     </div>
-    <span class="version-badge">v1.0</span>
+    <span class="version-badge">SRE Edition</span>
   </div>
   <div class="topbar-center">
-    <div class="status-pill live">
-      <span class="status-dot"></span>
-      <span>Live Simulation</span>
+    <div class="status-pill" id="statusPill">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Connecting…</span>
     </div>
   </div>
   <div class="topbar-right">
-    <span class="demo-badge">⚡ Demo Mode</span>
+    <div class="health-score-chip" id="healthChip">
+      <span class="hs-label">Health</span>
+      <span class="hs-value" id="healthScore">--</span>
+    </div>
     <div class="clock" id="clock">--:--:--</div>
   </div>
 </header>
 
 <main class="dashboard">
 
-  <div class="demo-banner">
-    ⚠️ <strong>Demo Mode</strong> — Displaying simulated metrics. 
-    <a href="https://github.com/ansu0311/pulsedash" target="_blank">Clone the repo</a> 
-    and run <code style="background:rgba(255,255,255,.07);padding:.1rem .4rem;border-radius:4px;font-family:var(--mono)">python app.py</code> for real system monitoring.
-  </div>
+  <!-- ░░ SRE SUMMARY ROW ░░ -->
+  <section class="sre-summary">
 
+    <div class="sre-card" id="srcUptime">
+      <div class="src-icon">⏱️</div>
+      <div class="src-body">
+        <div class="src-label">Collector Uptime</div>
+        <div class="src-value" id="summaryUptime">--</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcIncidents">
+      <div class="src-icon">🔥</div>
+      <div class="src-body">
+        <div class="src-label">Active Incidents</div>
+        <div class="src-value" id="summaryIncidents">0</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcMTTD">
+      <div class="src-icon">🔍</div>
+      <div class="src-body">
+        <div class="src-label">MTTD</div>
+        <div class="src-value" id="summaryMTTD">2s</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcMTTR">
+      <div class="src-icon">🔧</div>
+      <div class="src-body">
+        <div class="src-label">MTTR</div>
+        <div class="src-value" id="summaryMTTR">--</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcSloOk">
+      <div class="src-icon">✅</div>
+      <div class="src-body">
+        <div class="src-label">SLOs Met</div>
+        <div class="src-value" id="summarySloOk">--</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcSloBreached">
+      <div class="src-icon">💥</div>
+      <div class="src-body">
+        <div class="src-label">SLOs Breached</div>
+        <div class="src-value" id="summarySloBreached">--</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ░░ METRIC CARDS ░░ -->
   <section class="stat-cards">
+
     <div class="stat-card" id="card-cpu">
-      <div class="card-header"><span class="card-icon">🖥️</span><span class="card-label">CPU Usage</span><span class="card-badge" id="cpuAlert"></span></div>
+      <div class="card-header">
+        <span class="card-icon">🖥️</span>
+        <span class="card-label">CPU Usage</span>
+        <span class="sev-badge" id="cpuSev">OK</span>
+      </div>
       <div class="card-value" id="cpuVal">--%</div>
       <div class="progress-bar-wrap"><div class="progress-bar cpu-bar" id="cpuBar" style="width:0%"></div></div>
-      <div class="card-sub" id="cpuSub">Threshold: 80%</div>
+      <div class="card-sub" id="cpuSub">P1≥95% · P2≥80% · P3≥60%</div>
     </div>
+
     <div class="stat-card" id="card-mem">
-      <div class="card-header"><span class="card-icon">🧠</span><span class="card-label">Memory (RAM)</span><span class="card-badge" id="memAlert"></span></div>
+      <div class="card-header">
+        <span class="card-icon">🧠</span>
+        <span class="card-label">Memory (RAM)</span>
+        <span class="sev-badge" id="memSev">OK</span>
+      </div>
       <div class="card-value" id="memVal">--%</div>
       <div class="progress-bar-wrap"><div class="progress-bar mem-bar" id="memBar" style="width:0%"></div></div>
-      <div class="card-sub" id="memSub">-- GB / 8 GB</div>
+      <div class="card-sub" id="memSub">-- GB / -- GB</div>
     </div>
+
     <div class="stat-card" id="card-disk">
-      <div class="card-header"><span class="card-icon">💾</span><span class="card-label">Disk Usage</span><span class="card-badge" id="diskAlert"></span></div>
+      <div class="card-header">
+        <span class="card-icon">💾</span>
+        <span class="card-label">Disk Usage</span>
+        <span class="sev-badge" id="diskSev">OK</span>
+      </div>
       <div class="card-value" id="diskVal">--%</div>
       <div class="progress-bar-wrap"><div class="progress-bar disk-bar" id="diskBar" style="width:0%"></div></div>
-      <div class="card-sub" id="diskSub">-- GB / 228 GB</div>
+      <div class="card-sub" id="diskSub">-- GB / -- GB</div>
     </div>
+
     <div class="stat-card" id="card-net">
-      <div class="card-header"><span class="card-icon">🌐</span><span class="card-label">Network I/O</span></div>
+      <div class="card-header">
+        <span class="card-icon">🌐</span>
+        <span class="card-label">Network I/O</span>
+      </div>
       <div class="card-value" id="netVal">-- KB/s</div>
       <div class="net-row"><span class="net-label">↑ Sent</span><span class="net-val" id="netSent">--</span></div>
       <div class="net-row"><span class="net-label">↓ Recv</span><span class="net-val" id="netRecv">--</span></div>
     </div>
+
   </section>
 
+  <!-- ░░ CHARTS ░░ -->
   <section class="charts-grid">
     <div class="chart-card">
-      <div class="chart-card-header"><span>CPU Usage <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
+      <div class="chart-card-header"><span>CPU <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
       <div class="chart-wrap"><canvas id="cpuChart"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-card-header"><span>Memory Usage <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
+      <div class="chart-card-header"><span>Memory <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
       <div class="chart-wrap"><canvas id="memChart"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-card-header"><span>Disk Usage <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
+      <div class="chart-card-header"><span>Disk <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
       <div class="chart-wrap"><canvas id="diskChart"></canvas></div>
     </div>
     <div class="chart-card">
@@ -182,163 +159,54 @@
     </div>
   </section>
 
+  <!-- ░░ SLO PANEL ░░ -->
+  <section class="slo-section">
+    <div class="section-title">📊 Service Level Objectives (SLOs)</div>
+    <div class="slo-grid" id="sloGrid">
+      <div class="slo-loading">Loading SLO data…</div>
+    </div>
+  </section>
+
+  <!-- ░░ BOTTOM ROW ░░ -->
   <section class="bottom-row">
+
+    <!-- Processes -->
     <div class="panel">
       <div class="panel-header"><span>🔬 Top Processes</span><span class="panel-sub">by CPU</span></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>PID</th><th>Name</th><th>CPU %</th><th>MEM %</th><th>Status</th></tr></thead>
-          <tbody id="procBody"></tbody>
+          <tbody id="procBody"><tr><td colspan="5" class="empty-row">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
+
+    <!-- Alerts with severity + runbook -->
     <div class="panel">
-      <div class="panel-header"><span>🚨 Alert Log</span><span class="alert-count-badge" id="alertCount">0</span></div>
-      <div class="alerts-list" id="alertsList"><div class="no-alerts">✅ All systems normal</div></div>
+      <div class="panel-header">
+        <span>🚨 Alert Log</span>
+        <span class="alert-count-badge" id="alertCount">0</span>
+      </div>
+      <div class="alerts-list" id="alertsList">
+        <div class="no-alerts">✅ All systems normal</div>
+      </div>
     </div>
+
+    <!-- Incident Log -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>🔥 Incidents</span>
+        <span class="inc-count-badge" id="incidentCount">0</span>
+      </div>
+      <div class="incidents-list" id="incidentsList">
+        <div class="no-alerts">✅ No incidents</div>
+      </div>
+    </div>
+
   </section>
 
 </main>
 
-<script>
-// ── Simulated data engine ─────────────────────────────────────
-const MAX_POINTS = 60;
-const THRESHOLDS = { cpu: 80, mem: 90, disk: 90 };
-
-// Smooth random walker
-function walker(val, min, max, step) {
-  val += (Math.random() - 0.5) * step * 2;
-  return Math.max(min, Math.min(max, val));
-}
-
-const state = { cpu: 22, mem: 72, disk: 12.4, netS: 30, netR: 40 };
-const alerts = [];
-const PROCS = [
-  { pid: 1423, name: "chrome", base: 18 },
-  { pid: 2841, name: "node", base: 8 },
-  { pid: 3312, name: "python3", base: 5 },
-  { pid: 4019, name: "Finder", base: 2 },
-  { pid: 5502, name: "Spotlight", base: 3 },
-  { pid: 6120, name: "Safari", base: 6 },
-  { pid: 7331, name: "Code", base: 4 },
-  { pid: 8004, name: "Terminal", base: 1 },
-];
-
-// Chart factory
-function mkDS(label, color, fill = true) {
-  return { label, data: [], borderColor: color, backgroundColor: fill ? color + "18" : "transparent", borderWidth: 2, pointRadius: 0, tension: 0.4, fill };
-}
-const baseOpts = (yMax) => ({
-  responsive: true, maintainAspectRatio: false,
-  animation: { duration: 300 },
-  plugins: { legend: { display: false }, tooltip: { backgroundColor: "rgba(8,13,24,.92)", borderColor: "rgba(255,255,255,.1)", borderWidth: 1, titleColor: "#94a3b8", bodyColor: "#f0f4ff", padding: 10 } },
-  scales: {
-    x: { ticks: { color: "#475569", maxTicksLimit: 8, font: { family: "JetBrains Mono", size: 10 } }, grid: { color: "rgba(255,255,255,.04)" } },
-    y: { min: 0, max: yMax, ticks: { color: "#475569", font: { family: "JetBrains Mono", size: 10 } }, grid: { color: "rgba(255,255,255,.06)" } }
-  }
-});
-
-const cpuChart  = new Chart(document.getElementById("cpuChart"),  { type:"line", data:{ labels:[], datasets:[mkDS("CPU %","#6ee7f7")] }, options: baseOpts(100) });
-const memChart  = new Chart(document.getElementById("memChart"),  { type:"line", data:{ labels:[], datasets:[mkDS("RAM %","#a78bfa")] }, options: baseOpts(100) });
-const diskChart = new Chart(document.getElementById("diskChart"), { type:"line", data:{ labels:[], datasets:[mkDS("Disk %","#34d399")] }, options: baseOpts(100) });
-const netChart  = new Chart(document.getElementById("netChart"),  { type:"line", data:{ labels:[], datasets:[mkDS("Sent","#f59e0b",false), mkDS("Recv","#60a5fa",false)] }, options: baseOpts(undefined) });
-netChart.options.scales.y.max = undefined;
-
-function pushChart(chart, lbl, ...vals) {
-  chart.data.labels.push(lbl);
-  vals.forEach((v,i) => chart.data.datasets[i].data.push(v));
-  while (chart.data.labels.length > MAX_POINTS) {
-    chart.data.labels.shift();
-    chart.data.datasets.forEach(ds => ds.data.shift());
-  }
-  chart.update("none");
-}
-
-function fmtTime() {
-  return new Date().toLocaleTimeString("en-US", { hour12:false });
-}
-
-function setCard(id, val, barId, pct, sub, badgeId, threshold) {
-  const card  = document.getElementById(id);
-  const valEl = document.getElementById(id.replace("card-","") + "Val");
-  const barEl = document.getElementById(barId);
-  const subEl = document.getElementById(id.replace("card-","") + "Sub");
-  const badge = document.getElementById(badgeId);
-  if (valEl) valEl.textContent = val;
-  if (barEl) barEl.style.width = Math.min(pct,100) + "%";
-  if (subEl && sub) subEl.textContent = sub;
-  const isAlert = pct >= threshold;
-  if (card)  card.classList.toggle("danger", isAlert);
-  if (badge) { badge.textContent = isAlert ? "ALERT" : ""; badge.classList.toggle("alert-on", isAlert); }
-}
-
-function checkAlert(resource, value, threshold) {
-  if (value > threshold) {
-    alerts.unshift({ ts: fmtTime(), msg: `⚠️ ${resource} at ${value.toFixed(1)}% — exceeds ${threshold}% threshold` });
-    if (alerts.length > 20) alerts.pop();
-  }
-}
-
-function renderAlerts() {
-  const list  = document.getElementById("alertsList");
-  const badge = document.getElementById("alertCount");
-  badge.textContent = alerts.length;
-  list.innerHTML = alerts.length
-    ? alerts.map(a => `<div class="alert-item"><div class="a-msg">${a.msg}</div><div class="a-time">${a.ts}</div></div>`).join("")
-    : `<div class="no-alerts">✅ All systems normal</div>`;
-}
-
-function renderProcs() {
-  const tbody = document.getElementById("procBody");
-  const rows = PROCS.map(p => {
-    const cpu = Math.max(0, p.base + (Math.random()-0.5)*4);
-    const mem = +(Math.random()*3 + 0.5).toFixed(2);
-    const cc = cpu > 15 ? "cpu-crit" : cpu > 8 ? "cpu-warn" : "cpu-hot";
-    return `<tr><td>${p.pid}</td><td>${p.name}</td><td class="${cc}">${cpu.toFixed(1)}%</td><td>${mem}%</td><td class="status-running">running</td></tr>`;
-  }).sort(() => Math.random() - 0.5);
-  tbody.innerHTML = rows.join("");
-}
-
-function tick() {
-  const lbl = fmtTime();
-  state.cpu  = walker(state.cpu,  2,  95, 8);
-  state.mem  = walker(state.mem,  60, 88, 2);
-  state.disk = walker(state.disk, 11, 14, 0.3);
-  state.netS = walker(state.netS, 5,  300, 30);
-  state.netR = walker(state.netR, 5,  400, 35);
-
-  const cpu  = +state.cpu.toFixed(1);
-  const mem  = +state.mem.toFixed(1);
-  const disk = +state.disk.toFixed(1);
-  const memGB = ((mem / 100) * 8).toFixed(2);
-  const diskGB = ((disk/100)*228).toFixed(1);
-  const ns = +state.netS.toFixed(1), nr = +state.netR.toFixed(1);
-
-  setCard("card-cpu",  `${cpu}%`,  "cpuBar",  cpu,  `Threshold: ${THRESHOLDS.cpu}%`, "cpuAlert",  THRESHOLDS.cpu);
-  setCard("card-mem",  `${mem}%`,  "memBar",  mem,  `${memGB} GB / 8 GB`,            "memAlert",  THRESHOLDS.mem);
-  setCard("card-disk", `${disk}%`, "diskBar", disk, `${diskGB} GB / 228 GB`,          "diskAlert", THRESHOLDS.disk);
-
-  document.getElementById("netVal").textContent  = `${(ns+nr).toFixed(1)} KB/s`;
-  document.getElementById("netSent").textContent = `${ns} KB/s`;
-  document.getElementById("netRecv").textContent = `${nr} KB/s`;
-
-  pushChart(cpuChart,  lbl, cpu);
-  pushChart(memChart,  lbl, mem);
-  pushChart(diskChart, lbl, disk);
-  pushChart(netChart,  lbl, ns, nr);
-
-  checkAlert("CPU",    cpu,  THRESHOLDS.cpu);
-  checkAlert("Memory", mem,  THRESHOLDS.mem);
-  checkAlert("Disk",   disk, THRESHOLDS.disk);
-  renderAlerts();
-}
-
-// Clock
-setInterval(() => { document.getElementById("clock").textContent = fmtTime(); }, 1000);
-// Procs every 5s
-setInterval(renderProcs, 5000); renderProcs();
-// Metrics every 2s
-setInterval(tick, 2000); tick();
-</script>
+<script src="./static/js/dashboard.js"></script>
 </body>
 </html>
