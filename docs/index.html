@@ -96,10 +96,27 @@
     .alert-item .a-time{color:var(--t3);font-family:var(--mono);font-size:.68rem}
     @keyframes slide-in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
 
-    /* DEMO BANNER */
-    .demo-banner{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:var(--rs);padding:.65rem 1.1rem;font-size:.78rem;color:var(--warn);display:flex;align-items:center;gap:.6rem}
-    .demo-banner a{color:var(--cpu);text-decoration:none;font-weight:600}
-    .demo-banner a:hover{text-decoration:underline}
+    /* CONNECT PANEL */
+    .connect-panel{background:rgba(110,231,247,.05);border:1px solid rgba(110,231,247,.2);border-radius:var(--r);padding:1.1rem 1.4rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+    .connect-panel.connected{background:rgba(52,211,153,.05);border-color:rgba(52,211,153,.25)}
+    .connect-icon{font-size:1.5rem;flex-shrink:0}
+    .connect-body{flex:1;min-width:200px}
+    .connect-title{font-size:.85rem;font-weight:700;color:var(--t1);margin-bottom:.25rem}
+    .connect-sub{font-size:.74rem;color:var(--t2)}
+    .connect-sub code{background:rgba(255,255,255,.08);padding:.1rem .4rem;border-radius:4px;font-family:var(--mono);color:var(--cpu)}
+    .connect-form{display:flex;gap:.6rem;align-items:center;margin-top:.7rem;flex-wrap:wrap}
+    .connect-input{flex:1;min-width:220px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:var(--rs);padding:.5rem .9rem;color:var(--t1);font-family:var(--mono);font-size:.8rem;outline:none;transition:border-color .2s}
+    .connect-input:focus{border-color:var(--cpu)}
+    .connect-input::placeholder{color:var(--t3)}
+    .connect-btn{padding:.5rem 1.1rem;border-radius:var(--rs);border:none;cursor:pointer;font-weight:600;font-size:.8rem;font-family:var(--font);transition:all .2s}
+    .btn-connect{background:linear-gradient(135deg,#6ee7f7,#38bdf8);color:#080d18}
+    .btn-connect:hover{opacity:.85;transform:translateY(-1px)}
+    .btn-disconnect{background:rgba(255,77,109,.15);color:var(--danger);border:1px solid rgba(255,77,109,.3)}
+    .btn-disconnect:hover{background:rgba(255,77,109,.25)}
+    .connect-status{font-size:.75rem;font-family:var(--mono);padding:.3rem .8rem;border-radius:999px}
+    .cs-ok{background:rgba(52,211,153,.1);color:var(--ok);border:1px solid rgba(52,211,153,.25)}
+    .cs-err{background:rgba(255,77,109,.1);color:var(--danger);border:1px solid rgba(255,77,109,.25)}
+    .cs-try{background:rgba(148,163,184,.1);color:var(--t2);border:1px solid var(--border)}
 
     @media(max-width:1200px){.stat-cards{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:800px){.charts-grid,.bottom-row{grid-template-columns:1fr}.stat-cards{grid-template-columns:repeat(2,1fr)}.dashboard{padding:1rem}.topbar{padding:.75rem 1rem}.topbar-center{display:none}}
@@ -117,23 +134,34 @@
     <span class="version-badge">v1.0</span>
   </div>
   <div class="topbar-center">
-    <div class="status-pill live">
-      <span class="status-dot"></span>
-      <span>Live Simulation</span>
+    <div class="status-pill" id="statusPill">
+      <span class="status-dot" id="statusDot" style="background:var(--t3);box-shadow:none;animation:none"></span>
+      <span id="statusText">Demo Mode</span>
     </div>
   </div>
   <div class="topbar-right">
-    <span class="demo-badge">⚡ Demo Mode</span>
     <div class="clock" id="clock">--:--:--</div>
   </div>
 </header>
 
 <main class="dashboard">
 
-  <div class="demo-banner">
-    ⚠️ <strong>Demo Mode</strong> — Displaying simulated metrics. 
-    <a href="https://github.com/ansu647/pulsedash" target="_blank">Clone the repo</a> 
-    and run <code style="background:rgba(255,255,255,.07);padding:.1rem .4rem;border-radius:4px;font-family:var(--mono)">python app.py</code> for real system monitoring.
+  <!-- ── Connect Real Backend Panel ── -->
+  <div class="connect-panel" id="connectPanel">
+    <span class="connect-icon">🔌</span>
+    <div class="connect-body">
+      <div class="connect-title" id="connectTitle">Connect to Real Backend</div>
+      <div class="connect-sub" id="connectSub">
+        Run <code>python app.py</code> locally, then expose it with 
+        <code>cloudflared tunnel --url http://localhost:5050</code> and paste the URL below.
+      </div>
+      <div class="connect-form" id="connectForm">
+        <input class="connect-input" id="apiUrlInput" type="url"
+          placeholder="https://xxxx.trycloudflare.com" />
+        <button class="connect-btn btn-connect" onclick="connectBackend()">⚡ Connect</button>
+        <span class="connect-status cs-try" id="connectStatus" style="display:none"></span>
+      </div>
+    </div>
   </div>
 
   <section class="stat-cards">
@@ -201,144 +229,229 @@
 </main>
 
 <script>
-// ── Simulated data engine ─────────────────────────────────────
+// ══════════════════════════════════════════════════════
+//  PulseDash — Dual-mode: Demo simulation + Real backend
+// ══════════════════════════════════════════════════════
 const MAX_POINTS = 60;
-const THRESHOLDS = { cpu: 80, mem: 90, disk: 90 };
+let THRESHOLDS  = { cpu: 80, mem: 90, disk: 90 };
+let API_BASE    = null;   // null = demo mode
+let realTimers  = [];
+let demoTimers  = [];
+const alerts    = [];
 
-// Smooth random walker
-function walker(val, min, max, step) {
-  val += (Math.random() - 0.5) * step * 2;
-  return Math.max(min, Math.min(max, val));
-}
-
-const state = { cpu: 22, mem: 72, disk: 12.4, netS: 30, netR: 40 };
-const alerts = [];
-const PROCS = [
-  { pid: 1423, name: "chrome", base: 18 },
-  { pid: 2841, name: "node", base: 8 },
-  { pid: 3312, name: "python3", base: 5 },
-  { pid: 4019, name: "Finder", base: 2 },
-  { pid: 5502, name: "Spotlight", base: 3 },
-  { pid: 6120, name: "Safari", base: 6 },
-  { pid: 7331, name: "Code", base: 4 },
-  { pid: 8004, name: "Terminal", base: 1 },
-];
-
-// Chart factory
-function mkDS(label, color, fill = true) {
-  return { label, data: [], borderColor: color, backgroundColor: fill ? color + "18" : "transparent", borderWidth: 2, pointRadius: 0, tension: 0.4, fill };
+// ── Chart helpers ─────────────────────────────────────
+function mkDS(label, color, fill=true) {
+  return { label, data:[], borderColor:color, backgroundColor:fill?color+"18":"transparent", borderWidth:2, pointRadius:0, tension:0.4, fill };
 }
 const baseOpts = (yMax) => ({
-  responsive: true, maintainAspectRatio: false,
-  animation: { duration: 300 },
-  plugins: { legend: { display: false }, tooltip: { backgroundColor: "rgba(8,13,24,.92)", borderColor: "rgba(255,255,255,.1)", borderWidth: 1, titleColor: "#94a3b8", bodyColor: "#f0f4ff", padding: 10 } },
-  scales: {
-    x: { ticks: { color: "#475569", maxTicksLimit: 8, font: { family: "JetBrains Mono", size: 10 } }, grid: { color: "rgba(255,255,255,.04)" } },
-    y: { min: 0, max: yMax, ticks: { color: "#475569", font: { family: "JetBrains Mono", size: 10 } }, grid: { color: "rgba(255,255,255,.06)" } }
+  responsive:true, maintainAspectRatio:false, animation:{duration:300},
+  plugins:{ legend:{display:false}, tooltip:{backgroundColor:"rgba(8,13,24,.92)",borderColor:"rgba(255,255,255,.1)",borderWidth:1,titleColor:"#94a3b8",bodyColor:"#f0f4ff",padding:10} },
+  scales:{
+    x:{ticks:{color:"#475569",maxTicksLimit:8,font:{family:"JetBrains Mono",size:10}},grid:{color:"rgba(255,255,255,.04)"}},
+    y:{min:0,max:yMax,ticks:{color:"#475569",font:{family:"JetBrains Mono",size:10}},grid:{color:"rgba(255,255,255,.06)"}}
   }
 });
-
-const cpuChart  = new Chart(document.getElementById("cpuChart"),  { type:"line", data:{ labels:[], datasets:[mkDS("CPU %","#6ee7f7")] }, options: baseOpts(100) });
-const memChart  = new Chart(document.getElementById("memChart"),  { type:"line", data:{ labels:[], datasets:[mkDS("RAM %","#a78bfa")] }, options: baseOpts(100) });
-const diskChart = new Chart(document.getElementById("diskChart"), { type:"line", data:{ labels:[], datasets:[mkDS("Disk %","#34d399")] }, options: baseOpts(100) });
-const netChart  = new Chart(document.getElementById("netChart"),  { type:"line", data:{ labels:[], datasets:[mkDS("Sent","#f59e0b",false), mkDS("Recv","#60a5fa",false)] }, options: baseOpts(undefined) });
+const cpuChart  = new Chart(document.getElementById("cpuChart"),  {type:"line",data:{labels:[],datasets:[mkDS("CPU %","#6ee7f7")]},options:baseOpts(100)});
+const memChart  = new Chart(document.getElementById("memChart"),  {type:"line",data:{labels:[],datasets:[mkDS("RAM %","#a78bfa")]},options:baseOpts(100)});
+const diskChart = new Chart(document.getElementById("diskChart"), {type:"line",data:{labels:[],datasets:[mkDS("Disk %","#34d399")]},options:baseOpts(100)});
+const netChart  = new Chart(document.getElementById("netChart"),  {type:"line",data:{labels:[],datasets:[mkDS("Sent","#f59e0b",false),mkDS("Recv","#60a5fa",false)]},options:baseOpts(undefined)});
 netChart.options.scales.y.max = undefined;
 
 function pushChart(chart, lbl, ...vals) {
   chart.data.labels.push(lbl);
-  vals.forEach((v,i) => chart.data.datasets[i].data.push(v));
-  while (chart.data.labels.length > MAX_POINTS) {
-    chart.data.labels.shift();
-    chart.data.datasets.forEach(ds => ds.data.shift());
-  }
+  vals.forEach((v,i)=>chart.data.datasets[i].data.push(v));
+  while(chart.data.labels.length>MAX_POINTS){chart.data.labels.shift();chart.data.datasets.forEach(ds=>ds.data.shift());}
   chart.update("none");
 }
 
-function fmtTime() {
-  return new Date().toLocaleTimeString("en-US", { hour12:false });
+// ── UI helpers ────────────────────────────────────────
+function fmtTime(ts) {
+  return ts ? new Date(ts*1000).toLocaleTimeString("en-US",{hour12:false})
+            : new Date().toLocaleTimeString("en-US",{hour12:false});
 }
 
 function setCard(id, val, barId, pct, sub, badgeId, threshold) {
-  const card  = document.getElementById(id);
-  const valEl = document.getElementById(id.replace("card-","") + "Val");
-  const barEl = document.getElementById(barId);
-  const subEl = document.getElementById(id.replace("card-","") + "Sub");
-  const badge = document.getElementById(badgeId);
-  if (valEl) valEl.textContent = val;
-  if (barEl) barEl.style.width = Math.min(pct,100) + "%";
-  if (subEl && sub) subEl.textContent = sub;
-  const isAlert = pct >= threshold;
-  if (card)  card.classList.toggle("danger", isAlert);
-  if (badge) { badge.textContent = isAlert ? "ALERT" : ""; badge.classList.toggle("alert-on", isAlert); }
+  const card=document.getElementById(id), valEl=document.getElementById(id.replace("card-","")+"Val");
+  const barEl=document.getElementById(barId), subEl=document.getElementById(id.replace("card-","")+"Sub");
+  const badge=document.getElementById(badgeId);
+  if(valEl) valEl.textContent=val;
+  if(barEl) barEl.style.width=Math.min(pct,100)+"%";
+  if(subEl&&sub) subEl.textContent=sub;
+  const isAlert=pct>=threshold;
+  if(card) card.classList.toggle("danger",isAlert);
+  if(badge){badge.textContent=isAlert?"ALERT":"";badge.classList.toggle("alert-on",isAlert);}
 }
 
-function checkAlert(resource, value, threshold) {
-  if (value > threshold) {
-    alerts.unshift({ ts: fmtTime(), msg: `⚠️ ${resource} at ${value.toFixed(1)}% — exceeds ${threshold}% threshold` });
-    if (alerts.length > 20) alerts.pop();
+function addAlert(resource, value, threshold) {
+  if(value>threshold){
+    alerts.unshift({ts:fmtTime(),msg:`⚠️ ${resource} at ${value.toFixed(1)}% — exceeds ${threshold}% threshold`});
+    if(alerts.length>20) alerts.pop();
   }
 }
 
 function renderAlerts() {
-  const list  = document.getElementById("alertsList");
-  const badge = document.getElementById("alertCount");
-  badge.textContent = alerts.length;
-  list.innerHTML = alerts.length
-    ? alerts.map(a => `<div class="alert-item"><div class="a-msg">${a.msg}</div><div class="a-time">${a.ts}</div></div>`).join("")
-    : `<div class="no-alerts">✅ All systems normal</div>`;
+  const list=document.getElementById("alertsList"), badge=document.getElementById("alertCount");
+  badge.textContent=alerts.length;
+  list.innerHTML=alerts.length
+    ?alerts.map(a=>`<div class="alert-item"><div class="a-msg">${a.msg}</div><div class="a-time">${a.ts}</div></div>`).join("")
+    :`<div class="no-alerts">✅ All systems normal</div>`;
 }
 
-function renderProcs() {
-  const tbody = document.getElementById("procBody");
-  const rows = PROCS.map(p => {
-    const cpu = Math.max(0, p.base + (Math.random()-0.5)*4);
-    const mem = +(Math.random()*3 + 0.5).toFixed(2);
-    const cc = cpu > 15 ? "cpu-crit" : cpu > 8 ? "cpu-warn" : "cpu-hot";
-    return `<tr><td>${p.pid}</td><td>${p.name}</td><td class="${cc}">${cpu.toFixed(1)}%</td><td>${mem}%</td><td class="status-running">running</td></tr>`;
-  }).sort(() => Math.random() - 0.5);
-  tbody.innerHTML = rows.join("");
-}
-
-function tick() {
-  const lbl = fmtTime();
-  state.cpu  = walker(state.cpu,  2,  95, 8);
-  state.mem  = walker(state.mem,  60, 88, 2);
-  state.disk = walker(state.disk, 11, 14, 0.3);
-  state.netS = walker(state.netS, 5,  300, 30);
-  state.netR = walker(state.netR, 5,  400, 35);
-
-  const cpu  = +state.cpu.toFixed(1);
-  const mem  = +state.mem.toFixed(1);
-  const disk = +state.disk.toFixed(1);
-  const memGB = ((mem / 100) * 8).toFixed(2);
-  const diskGB = ((disk/100)*228).toFixed(1);
-  const ns = +state.netS.toFixed(1), nr = +state.netR.toFixed(1);
-
-  setCard("card-cpu",  `${cpu}%`,  "cpuBar",  cpu,  `Threshold: ${THRESHOLDS.cpu}%`, "cpuAlert",  THRESHOLDS.cpu);
-  setCard("card-mem",  `${mem}%`,  "memBar",  mem,  `${memGB} GB / 8 GB`,            "memAlert",  THRESHOLDS.mem);
-  setCard("card-disk", `${disk}%`, "diskBar", disk, `${diskGB} GB / 228 GB`,          "diskAlert", THRESHOLDS.disk);
-
-  document.getElementById("netVal").textContent  = `${(ns+nr).toFixed(1)} KB/s`;
-  document.getElementById("netSent").textContent = `${ns} KB/s`;
-  document.getElementById("netRecv").textContent = `${nr} KB/s`;
-
-  pushChart(cpuChart,  lbl, cpu);
-  pushChart(memChart,  lbl, mem);
-  pushChart(diskChart, lbl, disk);
-  pushChart(netChart,  lbl, ns, nr);
-
-  checkAlert("CPU",    cpu,  THRESHOLDS.cpu);
-  checkAlert("Memory", mem,  THRESHOLDS.mem);
-  checkAlert("Disk",   disk, THRESHOLDS.disk);
+function renderData(d, lbl) {
+  setCard("card-cpu",  `${d.cpu}%`,  "cpuBar",  d.cpu,  `Threshold: ${THRESHOLDS.cpu}%`, "cpuAlert",  THRESHOLDS.cpu);
+  setCard("card-mem",  `${d.mem}%`,  "memBar",  d.mem,  `${d.mem_used} GB / ${d.mem_total} GB`, "memAlert",  THRESHOLDS.mem);
+  setCard("card-disk", `${d.disk}%`, "diskBar", d.disk, `${d.disk_used} GB / ${d.disk_total} GB`,"diskAlert", THRESHOLDS.disk);
+  document.getElementById("netVal").textContent  = `${(d.net_sent+d.net_recv).toFixed(1)} KB/s`;
+  document.getElementById("netSent").textContent = `${d.net_sent} KB/s`;
+  document.getElementById("netRecv").textContent = `${d.net_recv} KB/s`;
+  pushChart(cpuChart, lbl, d.cpu);
+  pushChart(memChart, lbl, d.mem);
+  pushChart(diskChart,lbl, d.disk);
+  pushChart(netChart, lbl, d.net_sent, d.net_recv);
+  addAlert("CPU",    d.cpu,  THRESHOLDS.cpu);
+  addAlert("Memory", d.mem,  THRESHOLDS.mem);
+  addAlert("Disk",   d.disk, THRESHOLDS.disk);
   renderAlerts();
 }
 
-// Clock
-setInterval(() => { document.getElementById("clock").textContent = fmtTime(); }, 1000);
-// Procs every 5s
-setInterval(renderProcs, 5000); renderProcs();
-// Metrics every 2s
-setInterval(tick, 2000); tick();
+// ── Status pill ───────────────────────────────────────
+function setStatus(mode) {
+  const pill=document.getElementById("statusPill"), dot=document.getElementById("statusDot"), txt=document.getElementById("statusText");
+  if(mode==="live"){
+    pill.className="status-pill live"; txt.textContent="Live — Real Data";
+    dot.style.cssText="";
+  } else if(mode==="demo"){
+    pill.className="status-pill"; txt.textContent="Demo Simulation";
+    dot.style.cssText="background:var(--warn);box-shadow:0 0 6px var(--warn);animation:pulse-dot 1.8s ease-in-out infinite";
+  } else {
+    pill.className="status-pill"; txt.textContent="Connection lost — retrying…";
+    dot.style.cssText="background:var(--danger);box-shadow:none;animation:none";
+  }
+}
+
+// ── REAL BACKEND MODE ─────────────────────────────────
+async function startRealMode(base) {
+  stopAll();
+  API_BASE = base.replace(/\/$/,"");
+
+  // Load history first
+  try {
+    const hist = await fetch(`${API_BASE}/api/history`).then(r=>r.json());
+    hist.forEach(d=>{ const l=fmtTime(d.ts); cpuChart.data.labels.push(l); cpuChart.data.datasets[0].data.push(d.cpu); memChart.data.labels.push(l); memChart.data.datasets[0].data.push(d.mem); diskChart.data.labels.push(l); diskChart.data.datasets[0].data.push(d.disk); netChart.data.labels.push(l); netChart.data.datasets[0].data.push(d.net_sent); netChart.data.datasets[1].data.push(d.net_recv); });
+    [cpuChart,memChart,diskChart,netChart].forEach(c=>c.update());
+
+    // Load config thresholds
+    const cfg = await fetch(`${API_BASE}/api/config`).then(r=>r.json());
+    THRESHOLDS = { cpu: cfg.cpu_threshold, mem: cfg.memory_threshold, disk: cfg.disk_threshold };
+  } catch(_) {}
+
+  realTimers.push(setInterval(async()=>{
+    try {
+      const d=await fetch(`${API_BASE}/api/snapshot`,{headers:{"ngrok-skip-browser-warning":"1"}}).then(r=>r.json());
+      if(!d.ts) throw new Error();
+      renderData(d, fmtTime(d.ts));
+      setStatus("live");
+    } catch(_){ setStatus("error"); }
+  }, 2000));
+
+  realTimers.push(setInterval(async()=>{
+    try {
+      const procs=await fetch(`${API_BASE}/api/processes`,{headers:{"ngrok-skip-browser-warning":"1"}}).then(r=>r.json());
+      const tbody=document.getElementById("procBody");
+      tbody.innerHTML=procs.map(p=>{
+        const cc=p.cpu>50?"cpu-crit":p.cpu>20?"cpu-warn":"cpu-hot";
+        const sc=p.status==="running"?"status-running":p.status==="sleeping"?"status-sleep":"";
+        return `<tr><td>${p.pid}</td><td>${p.name}</td><td class="${cc}">${p.cpu}%</td><td>${p.mem}%</td><td class="${sc}">${p.status}</td></tr>`;
+      }).join("");
+    } catch(_){}
+  }, 5000));
+}
+
+// ── DEMO MODE ─────────────────────────────────────────
+const simState = { cpu:22, mem:72, disk:12.4, netS:30, netR:40 };
+function walker(v,mn,mx,s){ return Math.max(mn,Math.min(mx, v+(Math.random()-.5)*s*2)); }
+const DEMO_PROCS = [{pid:1423,name:"chrome",base:18},{pid:2841,name:"node",base:8},{pid:3312,name:"python3",base:5},{pid:4019,name:"Finder",base:2},{pid:5502,name:"Spotlight",base:3},{pid:6120,name:"Safari",base:6},{pid:7331,name:"Code",base:4},{pid:8004,name:"Terminal",base:1}];
+
+function demoTick() {
+  simState.cpu  = walker(simState.cpu, 2,95,8);
+  simState.mem  = walker(simState.mem, 60,88,2);
+  simState.disk = walker(simState.disk,11,14,0.3);
+  simState.netS = walker(simState.netS,5,300,30);
+  simState.netR = walker(simState.netR,5,400,35);
+  const cpu=+simState.cpu.toFixed(1), mem=+simState.mem.toFixed(1), disk=+simState.disk.toFixed(1);
+  const ns=+simState.netS.toFixed(1), nr=+simState.netR.toFixed(1);
+  const memGB=((mem/100)*8).toFixed(2), diskGB=((disk/100)*228).toFixed(1);
+  renderData({ cpu, mem, mem_used:memGB, mem_total:8, disk, disk_used:diskGB, disk_total:228, net_sent:ns, net_recv:nr }, fmtTime());
+  setStatus("demo");
+}
+
+function startDemoMode() {
+  stopAll(); API_BASE=null;
+  demoTimers.push(setInterval(demoTick, 2000)); demoTick();
+  demoTimers.push(setInterval(()=>{
+    const tbody=document.getElementById("procBody");
+    tbody.innerHTML=DEMO_PROCS.map(p=>{const cpu=Math.max(0,p.base+(Math.random()-.5)*4),mem=+(Math.random()*3+.5).toFixed(2),cc=cpu>15?"cpu-crit":cpu>8?"cpu-warn":"cpu-hot";return`<tr><td>${p.pid}</td><td>${p.name}</td><td class="${cc}">${cpu.toFixed(1)}%</td><td>${mem}%</td><td class="status-running">running</td></tr>`;}).join("");
+  }, 5000));
+}
+
+function stopAll() {
+  [...realTimers,...demoTimers].forEach(clearInterval);
+  realTimers=[]; demoTimers=[];
+}
+
+// ── Connect UI ────────────────────────────────────────
+async function connectBackend() {
+  const input = document.getElementById("apiUrlInput");
+  const status= document.getElementById("connectStatus");
+  let url = input.value.trim();
+  if(!url){ input.focus(); return; }
+  if(!url.startsWith("http")) url="https://"+url;
+
+  status.style.display="inline-block";
+  status.className="connect-status cs-try";
+  status.textContent="⏳ Connecting…";
+
+  try {
+    const res = await fetch(`${url}/api/snapshot`, {headers:{"ngrok-skip-browser-warning":"1"}});
+    if(!res.ok) throw new Error();
+    const d = await res.json();
+    if(!d.ts && d.cpu===undefined) throw new Error();
+
+    // Success!
+    status.className="connect-status cs-ok"; status.textContent="✅ Connected";
+    document.getElementById("connectTitle").textContent="🟢 Connected to Real Backend";
+    document.getElementById("connectSub").innerHTML=`Receiving live data from <code>${url}</code>`;
+    document.getElementById("connectForm").innerHTML=`<code style="font-family:var(--mono);font-size:.78rem;color:var(--t2)">${url}</code><button class="connect-btn btn-disconnect" onclick="disconnectBackend()">Disconnect</button>`;
+    document.getElementById("connectPanel").classList.add("connected");
+    localStorage.setItem("pd_api", url);
+    await startRealMode(url);
+  } catch(e) {
+    status.className="connect-status cs-err"; status.textContent="❌ Cannot reach backend";
+  }
+}
+
+function disconnectBackend() {
+  localStorage.removeItem("pd_api");
+  startDemoMode();
+  // Reset panel
+  document.getElementById("connectPanel").classList.remove("connected");
+  document.getElementById("connectTitle").textContent="Connect to Real Backend";
+  document.getElementById("connectSub").innerHTML=`Run <code>python app.py</code> locally, then expose it with <code>cloudflared tunnel --url http://localhost:5050</code> and paste the URL below.`;
+  document.getElementById("connectForm").innerHTML=`<input class="connect-input" id="apiUrlInput" type="url" placeholder="https://xxxx.trycloudflare.com"/><button class="connect-btn btn-connect" onclick="connectBackend()">⚡ Connect</button><span class="connect-status cs-try" id="connectStatus" style="display:none"></span>`;
+}
+
+// ── Boot ──────────────────────────────────────────────
+setInterval(()=>{ document.getElementById("clock").textContent=fmtTime(); }, 1000);
+
+// Auto-connect: ?api=URL param OR localStorage
+const params = new URLSearchParams(location.search);
+const savedApi = params.get("api") || localStorage.getItem("pd_api");
+if(savedApi) {
+  document.getElementById("apiUrlInput") && (document.getElementById("apiUrlInput").value=savedApi);
+  connectBackend();
+} else {
+  startDemoMode();
+}
 </script>
 </body>
 </html>
