@@ -1,66 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PulseDash — Real-Time System Health Monitor</title>
-  <meta name="description" content="PulseDash: Real-time CPU, Memory, Disk, and Network monitoring dashboard with live charts, alerts, and process insights." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>PulseDash — SRE System Health Monitor</title>
+  <meta name="description" content="SRE-grade real-time monitoring: SLOs, error budgets, incident tracking, Prometheus metrics."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/style.css"/>
 </head>
 <body>
 
-<!-- ░░░░ HEADER ░░░░ -->
+<!-- ░░ TOPBAR ░░ -->
 <header class="topbar">
   <div class="topbar-left">
     <div class="logo">
       <span class="logo-icon">📡</span>
       <span class="logo-text">Pulse<span class="logo-accent">Dash</span></span>
     </div>
-    <span class="version-badge">v1.0</span>
+    <span class="version-badge">SRE Edition</span>
   </div>
   <div class="topbar-center">
     <div class="status-pill" id="statusPill">
-      <span class="status-dot"></span>
+      <span class="status-dot" id="statusDot"></span>
       <span id="statusText">Connecting…</span>
     </div>
   </div>
   <div class="topbar-right">
+    <div class="health-score-chip" id="healthChip">
+      <span class="hs-label">Health</span>
+      <span class="hs-value" id="healthScore">--</span>
+    </div>
     <div class="clock" id="clock">--:--:--</div>
   </div>
 </header>
 
-<!-- ░░░░ MAIN ░░░░ -->
 <main class="dashboard">
 
-  <!-- ── Stat Cards ── -->
+  <!-- ░░ SRE SUMMARY ROW ░░ -->
+  <section class="sre-summary">
+
+    <div class="sre-card" id="srcUptime">
+      <div class="src-icon">⏱️</div>
+      <div class="src-body">
+        <div class="src-label">Collector Uptime</div>
+        <div class="src-value" id="summaryUptime">--</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcIncidents">
+      <div class="src-icon">🔥</div>
+      <div class="src-body">
+        <div class="src-label">Active Incidents</div>
+        <div class="src-value" id="summaryIncidents">0</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcMTTD">
+      <div class="src-icon">🔍</div>
+      <div class="src-body">
+        <div class="src-label">MTTD</div>
+        <div class="src-value" id="summaryMTTD">2s</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcMTTR">
+      <div class="src-icon">🔧</div>
+      <div class="src-body">
+        <div class="src-label">MTTR</div>
+        <div class="src-value" id="summaryMTTR">--</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcSloOk">
+      <div class="src-icon">✅</div>
+      <div class="src-body">
+        <div class="src-label">SLOs Met</div>
+        <div class="src-value" id="summarySloOk">--</div>
+      </div>
+    </div>
+
+    <div class="sre-card" id="srcSloBreached">
+      <div class="src-icon">💥</div>
+      <div class="src-body">
+        <div class="src-label">SLOs Breached</div>
+        <div class="src-value" id="summarySloBreached">--</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ░░ METRIC CARDS ░░ -->
   <section class="stat-cards">
 
     <div class="stat-card" id="card-cpu">
       <div class="card-header">
         <span class="card-icon">🖥️</span>
         <span class="card-label">CPU Usage</span>
-        <span class="card-badge" id="cpuAlert"></span>
+        <span class="sev-badge" id="cpuSev">OK</span>
       </div>
       <div class="card-value" id="cpuVal">--%</div>
-      <div class="progress-bar-wrap">
-        <div class="progress-bar cpu-bar" id="cpuBar" style="width:0%"></div>
-      </div>
-      <div class="card-sub" id="cpuSub">Threshold: 80%</div>
+      <div class="progress-bar-wrap"><div class="progress-bar cpu-bar" id="cpuBar" style="width:0%"></div></div>
+      <div class="card-sub" id="cpuSub">P1≥95% · P2≥80% · P3≥60%</div>
     </div>
 
     <div class="stat-card" id="card-mem">
       <div class="card-header">
         <span class="card-icon">🧠</span>
         <span class="card-label">Memory (RAM)</span>
-        <span class="card-badge" id="memAlert"></span>
+        <span class="sev-badge" id="memSev">OK</span>
       </div>
       <div class="card-value" id="memVal">--%</div>
-      <div class="progress-bar-wrap">
-        <div class="progress-bar mem-bar" id="memBar" style="width:0%"></div>
-      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar mem-bar" id="memBar" style="width:0%"></div></div>
       <div class="card-sub" id="memSub">-- GB / -- GB</div>
     </div>
 
@@ -68,12 +120,10 @@
       <div class="card-header">
         <span class="card-icon">💾</span>
         <span class="card-label">Disk Usage</span>
-        <span class="card-badge" id="diskAlert"></span>
+        <span class="sev-badge" id="diskSev">OK</span>
       </div>
       <div class="card-value" id="diskVal">--%</div>
-      <div class="progress-bar-wrap">
-        <div class="progress-bar disk-bar" id="diskBar" style="width:0%"></div>
-      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar disk-bar" id="diskBar" style="width:0%"></div></div>
       <div class="card-sub" id="diskSub">-- GB / -- GB</div>
     </div>
 
@@ -83,98 +133,73 @@
         <span class="card-label">Network I/O</span>
       </div>
       <div class="card-value" id="netVal">-- KB/s</div>
-      <div class="net-row">
-        <span class="net-label">↑ Sent</span>
-        <span class="net-val" id="netSent">--</span>
-      </div>
-      <div class="net-row">
-        <span class="net-label">↓ Recv</span>
-        <span class="net-val" id="netRecv">--</span>
-      </div>
+      <div class="net-row"><span class="net-label">↑ Sent</span><span class="net-val" id="netSent">--</span></div>
+      <div class="net-row"><span class="net-label">↓ Recv</span><span class="net-val" id="netRecv">--</span></div>
     </div>
 
   </section>
 
-  <!-- ── Charts Grid ── -->
+  <!-- ░░ CHARTS ░░ -->
   <section class="charts-grid">
-
     <div class="chart-card">
-      <div class="chart-card-header">
-        <span>CPU Usage <span class="chart-unit">(%)</span></span>
-        <span class="chart-live-dot"></span>
-      </div>
-      <div class="chart-wrap">
-        <canvas id="cpuChart"></canvas>
-      </div>
+      <div class="chart-card-header"><span>CPU <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
+      <div class="chart-wrap"><canvas id="cpuChart"></canvas></div>
     </div>
-
     <div class="chart-card">
-      <div class="chart-card-header">
-        <span>Memory Usage <span class="chart-unit">(%)</span></span>
-        <span class="chart-live-dot"></span>
-      </div>
-      <div class="chart-wrap">
-        <canvas id="memChart"></canvas>
-      </div>
+      <div class="chart-card-header"><span>Memory <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
+      <div class="chart-wrap"><canvas id="memChart"></canvas></div>
     </div>
-
     <div class="chart-card">
-      <div class="chart-card-header">
-        <span>Disk Usage <span class="chart-unit">(%)</span></span>
-        <span class="chart-live-dot"></span>
-      </div>
-      <div class="chart-wrap">
-        <canvas id="diskChart"></canvas>
-      </div>
+      <div class="chart-card-header"><span>Disk <span class="chart-unit">(%)</span></span><span class="chart-live-dot"></span></div>
+      <div class="chart-wrap"><canvas id="diskChart"></canvas></div>
     </div>
-
     <div class="chart-card">
-      <div class="chart-card-header">
-        <span>Network I/O <span class="chart-unit">(KB/s)</span></span>
-        <span class="chart-live-dot"></span>
-      </div>
-      <div class="chart-wrap">
-        <canvas id="netChart"></canvas>
-      </div>
+      <div class="chart-card-header"><span>Network I/O <span class="chart-unit">(KB/s)</span></span><span class="chart-live-dot"></span></div>
+      <div class="chart-wrap"><canvas id="netChart"></canvas></div>
     </div>
-
   </section>
 
-  <!-- ── Bottom Row: Processes + Alerts ── -->
+  <!-- ░░ SLO PANEL ░░ -->
+  <section class="slo-section">
+    <div class="section-title">📊 Service Level Objectives (SLOs)</div>
+    <div class="slo-grid" id="sloGrid">
+      <div class="slo-loading">Loading SLO data…</div>
+    </div>
+  </section>
+
+  <!-- ░░ BOTTOM ROW ░░ -->
   <section class="bottom-row">
 
-    <!-- Process Table -->
-    <div class="panel processes-panel">
-      <div class="panel-header">
-        <span>🔬 Top Processes</span>
-        <span class="panel-sub">by CPU</span>
-      </div>
+    <!-- Processes -->
+    <div class="panel">
+      <div class="panel-header"><span>🔬 Top Processes</span><span class="panel-sub">by CPU</span></div>
       <div class="table-wrap">
-        <table id="procTable">
-          <thead>
-            <tr>
-              <th>PID</th>
-              <th>Name</th>
-              <th>CPU %</th>
-              <th>MEM %</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="procBody">
-            <tr><td colspan="5" class="empty-row">Loading…</td></tr>
-          </tbody>
+        <table>
+          <thead><tr><th>PID</th><th>Name</th><th>CPU %</th><th>MEM %</th><th>Status</th></tr></thead>
+          <tbody id="procBody"><tr><td colspan="5" class="empty-row">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
 
-    <!-- Alerts Panel -->
-    <div class="panel alerts-panel">
+    <!-- Alerts with severity + runbook -->
+    <div class="panel">
       <div class="panel-header">
         <span>🚨 Alert Log</span>
         <span class="alert-count-badge" id="alertCount">0</span>
       </div>
       <div class="alerts-list" id="alertsList">
         <div class="no-alerts">✅ All systems normal</div>
+      </div>
+    </div>
+
+    <!-- Incident Log -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>🔥 Incidents</span>
+        <span class="inc-count-badge" id="incidentCount">0</span>
+      </div>
+      <div class="incidents-list" id="incidentsList">
+        <div class="no-alerts">✅ No incidents</div>
       </div>
     </div>
 
