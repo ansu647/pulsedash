@@ -19,7 +19,6 @@
       <span class="logo-icon">📡</span>
       <span class="logo-text">Pulse<span class="logo-accent">Dash</span></span>
     </div>
-    <span class="version-badge">SRE Edition</span>
   </div>
   <div class="topbar-center">
     <div class="status-pill" id="statusPill">
@@ -164,6 +163,19 @@
     <div class="section-title">📊 Service Level Objectives (SLOs)</div>
     <div class="slo-grid" id="sloGrid">
       <div class="slo-loading">Loading SLO data…</div>
+    </div>
+  </section>
+
+  <!-- ░░ ANOMALY DETECTION ░░ -->
+  <section class="anomaly-section">
+    <div class="section-title">🔬 Anomaly Detection <span class="section-sub">Z-score ≥ 2.5σ over 60-sample window</span></div>
+    <div class="anomaly-row">
+      <div class="anomaly-baseline" id="anomalyBaseline">
+        <div class="slo-loading">Collecting baseline data…</div>
+      </div>
+      <div class="anomaly-log" id="anomalyLog">
+        <div class="no-alerts">✅ No anomalies detected</div>
+      </div>
     </div>
   </section>
 

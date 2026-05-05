@@ -9,6 +9,8 @@ API surface:
   GET /api/alerts    → Recent alerts with severity + runbook
   GET /api/slos      → SLO compliance + error budget report
   GET /api/incidents → Incident log (open + closed)
+  GET /api/anomalies → Statistically-detected anomalies (Z-score)
+  GET /api/changelog → Change log (service restarts / config events)
   GET /api/processes → Top processes by CPU
   GET /api/config    → Threshold configuration
   GET /api/summary   → Health score + uptime + SRE summary
@@ -119,6 +121,31 @@ def api_incidents():
         "mttr_s":   collector.incident_manager.mttr_seconds(),
         "mttd_s":   collector.incident_manager.mttd_seconds(),
     })
+
+
+@app.route("/api/anomalies")
+def api_anomalies():
+    """
+    Statistical anomaly detection (Z-score ≥ 2.5σ over a 60-sample window).
+    Returns recent anomaly events and per-resource baseline stats.
+    """
+    return jsonify({
+        "anomalies": collector.recent_anomalies(30),
+        "baseline":  collector.anomaly_summary(),
+    })
+
+
+_CHANGELOG: list = [
+    {"ts": time.time(), "type": "START", "msg": "PulseDash collector started", "author": "system"},
+]
+
+@app.route("/api/changelog")
+def api_changelog():
+    """
+    Change log — ordered list of deployment / configuration change events.
+    In production this would be populated by your CD pipeline hooks.
+    """
+    return jsonify(list(reversed(_CHANGELOG)))
 
 
 @app.route("/api/summary")

@@ -12,6 +12,7 @@ from config import Config
 from monitor.logger import logger
 from monitor.slo import SLOTracker
 from monitor.incident import IncidentManager
+from monitor.anomaly import AnomalyDetector
 
 
 def _severity(resource: str, value: float) -> str:
@@ -43,6 +44,7 @@ class MetricsCollector:
 
         self.slo_tracker      = SLOTracker()
         self.incident_manager = IncidentManager()
+        self.anomaly_detector = AnomalyDetector(window=60, z_threshold=2.5)
 
         # Uptime
         self._start_time = time.time()
@@ -112,6 +114,11 @@ class MetricsCollector:
         # SLO tracking
         self.slo_tracker.record(cpu_pct, mem_pct, disk_pct)
 
+        # Anomaly detection (statistical Z-score)
+        self.anomaly_detector.record("cpu",    cpu_pct)
+        self.anomaly_detector.record("memory", mem_pct)
+        self.anomaly_detector.record("disk",   disk_pct)
+
         # Incident management (critical threshold only)
         t = Config.THRESHOLDS
         self.incident_manager.evaluate("cpu",    cpu_pct,  t["cpu"]["critical"])
@@ -160,6 +167,12 @@ class MetricsCollector:
 
     def slo_report(self):
         return self.slo_tracker.report()
+
+    def recent_anomalies(self, limit: int = 20) -> list:
+        return self.anomaly_detector.recent_anomalies(limit)
+
+    def anomaly_summary(self) -> dict:
+        return self.anomaly_detector.summary()
 
     def incidents(self, limit=20):
         return self.incident_manager.all_incidents(limit)

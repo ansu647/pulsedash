@@ -12,6 +12,7 @@ const API = {
   slos:      "/api/slos",
   incidents: "/api/incidents",
   summary:   "/api/summary",
+  anomalies: "/api/anomalies",
 };
 
 const MAX_POINTS = 75;
@@ -272,7 +273,49 @@ async function fetchIncidents() {
   } catch (_) {}
 }
 
-// ── Process table ─────────────────────────────────────────────
+// ── Anomaly detection panel ─────────────────────────────
+ async function fetchAnomalies() {
+  try {
+    const data     = await fetch(API.anomalies).then(r => r.json());
+    const baseline = data.baseline || {};
+    const events   = data.anomalies || [];
+
+    // Baseline stats panel
+    const baseEl = document.getElementById("anomalyBaseline");
+    const resources = Object.entries(baseline);
+    if (resources.length === 0) {
+      baseEl.innerHTML = `<div class="slo-loading">Collecting baseline data…<br><small style="font-size:.65rem">Needs 10+ samples (~20s)</small></div>`;
+    } else {
+      baseEl.innerHTML = resources.map(([res, s]) => {
+        const meanStr = s.mean !== null ? `μ ${s.mean}%` : "—";
+        const stdStr  = s.std  !== null ? `σ ${s.std}%`  : "";
+        return `<div class="baseline-row">
+          <span class="baseline-name">${res}</span>
+          <span class="baseline-stats">${meanStr}${s.std !== null ? "  ·  " + stdStr : ""}   n=${s.samples}</span>
+        </div>`;
+      }).join("");
+    }
+
+    // Anomaly events log
+    const logEl = document.getElementById("anomalyLog");
+    if (!events.length) {
+      logEl.innerHTML = `<div class="no-alerts">✅ No anomalies detected</div>`;
+      return;
+    }
+    logEl.innerHTML = events.map(e => {
+      const dir = e.direction || "HIGH";
+      return `<div class="anomaly-event ${dir.toLowerCase()}">
+        <div class="ae-header">
+          <span class="ae-direction ${dir}">${dir}</span>
+          <span class="ae-resource">${e.resource} at ${e.value}%</span>
+        </div>
+        <div class="ae-details">μ=${e.mean}% | σ=${e.std}% | Z=${e.z_score} &nbsp;···&nbsp; ${fmtTime(e.ts)}</div>
+      </div>`;
+    }).join("");
+  } catch (_) {}
+}
+
+// ── Process table ───────────────────────────────────────────────
 async function fetchProcesses() {
   try {
     const procs = await fetch(API.processes).then(r => r.json());
@@ -322,11 +365,13 @@ setInterval(() => {
   await fetchAlerts();
   await fetchIncidents();
   await fetchProcesses();
+  await fetchAnomalies();
 
-  setInterval(fetchSnapshot,  2000);
-  setInterval(fetchSummary,   5000);
-  setInterval(fetchSLOs,      5000);
-  setInterval(fetchAlerts,    4000);
-  setInterval(fetchIncidents, 6000);
-  setInterval(fetchProcesses, 8000);
+  setInterval(fetchSnapshot,   2000);
+  setInterval(fetchSummary,    5000);
+  setInterval(fetchSLOs,       5000);
+  setInterval(fetchAlerts,     4000);
+  setInterval(fetchIncidents,  6000);
+  setInterval(fetchProcesses,  8000);
+  setInterval(fetchAnomalies, 10000);
 })();
